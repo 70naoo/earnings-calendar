@@ -112,6 +112,55 @@ if "add_message" in st.session_state:
     else:
         st.sidebar.warning(msg)
 
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📂 CSVから一括追加")
+st.sidebar.markdown("楽天証券などのCSVをアップロード")
+
+uploaded = st.sidebar.file_uploader("CSVファイルを選択", type=["csv"], label_visibility="collapsed")
+
+if uploaded:
+    try:
+        # 文字コード自動判定（Shift-JIS or UTF-8）
+        raw = uploaded.read()
+        for enc in ["shift_jis", "utf-8", "cp932"]:
+            try:
+                df_csv = pd.read_csv(pd.io.common.BytesIO(raw), encoding=enc)
+                break
+            except Exception:
+                continue
+
+        st.sidebar.markdown("**列を選択してください**")
+        cols = df_csv.columns.tolist()
+        selected_col = st.sidebar.selectbox("証券コードが入っている列", cols)
+
+        market = st.sidebar.radio("市場", ["日本株（.T を付ける）", "米国株（そのまま）"], horizontal=True)
+
+        if st.sidebar.button("一括追加", type="primary"):
+            stocks_now = load_stocks()
+            added, skipped = [], []
+            for val in df_csv[selected_col].dropna().astype(str):
+                # 数字4桁の証券コードを抽出
+                code = val.strip().split(".")[0].strip()
+                if not code:
+                    continue
+                ticker = f"{code}.T" if "日本株" in market else code.upper()
+                if ticker not in stocks_now:
+                    stocks_now.append(ticker)
+                    added.append(ticker)
+                else:
+                    skipped.append(ticker)
+            save_stocks(stocks_now)
+            if added:
+                st.sidebar.success(f"{len(added)}銘柄を追加しました")
+            if skipped:
+                st.sidebar.info(f"{len(skipped)}銘柄はすでに登録済みでスキップ")
+            st.rerun()
+
+        st.sidebar.dataframe(df_csv[[selected_col]].head(5), hide_index=True)
+
+    except Exception as e:
+        st.sidebar.error(f"CSVの読み込みに失敗しました: {e}")
+
 stocks = load_stocks()
 if stocks:
     st.sidebar.markdown("---")
