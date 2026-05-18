@@ -125,7 +125,7 @@ PER: {info.get('per')} / PBR: {info.get('pbr')}
 （短期・中期で注目すべきイベントや指標を2〜3点）"""
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash-lite")
     response = model.generate_content(prompt)
     return response.text
 
