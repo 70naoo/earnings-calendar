@@ -57,6 +57,40 @@ def get_earnings_date(ticker_symbol):
     except Exception:
         return ticker_symbol, None
 
+def parse_rakuten_csv(text):
+    """楽天証券の保有資産CSVから株式ティッカーを抽出する"""
+    import csv, io
+    reader = csv.reader(io.StringIO(text))
+    rows = list(reader)
+
+    # ヘッダー行を探す（「種別」または「区分」から始まる行）
+    header_idx = None
+    for i, row in enumerate(rows):
+        if len(row) >= 2 and row[0].strip() in ("種別", "区分") and "コード" in (row[1] if len(row) > 1 else ""):
+            header_idx = i
+            break
+
+    if header_idx is None:
+        return []
+
+    tickers = []
+    for row in rows[header_idx + 1:]:
+        if len(row) < 2:
+            continue
+        category = row[0].strip()
+        code = row[1].strip()
+
+        # 空・投資信託・MMFはスキップ
+        if not code or category in ("投資信託", "外貨MMF", "預り金", ""):
+            continue
+
+        if category in ("国内株式", "国内ETF・ETN"):
+            tickers.append(f"{code}.T")
+        elif category in ("外国株式", "外国ETF", "米国株式", "米国ETF"):
+            tickers.append(code.upper())
+
+    return tickers
+
 def days_until(date):
     if date is None:
         return None
@@ -120,46 +154,44 @@ uploaded = st.sidebar.file_uploader("CSVファイルを選択", type=["csv"], la
 
 if uploaded:
     try:
-        # 文字コード自動判定（Shift-JIS or UTF-8）
         raw = uploaded.read()
-        for enc in ["shift_jis", "utf-8", "cp932"]:
+
+        # 文字コード自動判定
+        text = None
+        for enc in ["cp932", "shift_jis", "utf-8"]:
             try:
-                df_csv = pd.read_csv(pd.io.common.BytesIO(raw), encoding=enc)
+                text = raw.decode(enc)
                 break
             except Exception:
                 continue
 
-        st.sidebar.markdown("**列を選択してください**")
-        cols = df_csv.columns.tolist()
-        selected_col = st.sidebar.selectbox("証券コードが入っている列", cols)
-
-        market = st.sidebar.radio("市場", ["日本株（.T を付ける）", "米国株（そのまま）"], horizontal=True)
-
-        if st.sidebar.button("一括追加", type="primary"):
-            stocks_now = load_stocks()
-            added, skipped = [], []
-            for val in df_csv[selected_col].dropna().astype(str):
-                # 数字4桁の証券コードを抽出
-                code = val.strip().split(".")[0].strip()
-                if not code:
-                    continue
-                ticker = f"{code}.T" if "日本株" in market else code.upper()
-                if ticker not in stocks_now:
-                    stocks_now.append(ticker)
-                    added.append(ticker)
-                else:
-                    skipped.append(ticker)
-            save_stocks(stocks_now)
-            if added:
-                st.sidebar.success(f"{len(added)}銘柄を追加しました")
-            if skipped:
-                st.sidebar.info(f"{len(skipped)}銘柄はすでに登録済みでスキップ")
-            st.rerun()
-
-        st.sidebar.dataframe(df_csv[[selected_col]].head(5), hide_index=True)
-
-    except Exception as e:
-        st.sidebar.error(f"CSVの読み込みに失敗しました: {e}")
+        if text is None:
+            st.sidebar.error("文字コードの判定に失敗しました")
+        else:
+            tickers_found = parse_rakuten_csv(text)
+            if tickers_found:
+                st.sidebar.markdown(f"**{len(tickers_found)}銘柄を検出**（投資信託は除外）")
+                st.sidebar.dataframe(
+                    pd.DataFrame(tickers_found, columns=["ティッカー"]),
+                    hide_index=True, height=150
+                )
+                if st.sidebar.button("一括追加", type="primary"):
+                    stocks_now = load_stocks()
+                    added, skipped = [], []
+                    for t in tickers_found:
+                        if t not in stocks_now:
+                            stocks_now.append(t)
+                            added.append(t)
+                        else:
+                            skipped.append(t)
+                    save_stocks(stocks_now)
+                    if added:
+                        st.sidebar.success(f"{len(added)}銘柄を追加しました")
+                    if skipped:
+                        st.sidebar.info(f"{len(skipped)}銘柄はすでに登録済みでスキップ")
+                    st.rerun()
+            else:
+                st.sidebar.warning("銘柄が見つかりませんでした。楽天証券の保有資産CSVか確認してください")
 
 stocks = load_stocks()
 if stocks:
