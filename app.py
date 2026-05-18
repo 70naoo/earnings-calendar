@@ -192,6 +192,8 @@ if uploaded:
                     st.rerun()
             else:
                 st.sidebar.warning("銘柄が見つかりませんでした。楽天証券の保有資産CSVか確認してください")
+    except Exception as e:
+        st.sidebar.error(f"CSVの読み込みに失敗しました: {e}")
 
 stocks = load_stocks()
 if stocks:
