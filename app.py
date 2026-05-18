@@ -198,7 +198,11 @@ if uploaded:
 stocks = load_stocks()
 if stocks:
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**登録中の銘柄**")
+    col_title, col_all = st.sidebar.columns([2, 1])
+    col_title.markdown("**登録中の銘柄**")
+    if col_all.button("全削除", type="secondary"):
+        save_stocks([])
+        st.rerun()
     for s in stocks:
         col1, col2 = st.sidebar.columns([3, 1])
         col1.write(s)
