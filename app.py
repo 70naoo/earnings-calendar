@@ -4,7 +4,7 @@ import pandas as pd
 import json
 import os
 from datetime import datetime
-import anthropic
+import google.generativeai as genai
 
 DATA_FILE = "stocks.json"
 
@@ -95,7 +95,7 @@ def get_news(ticker_symbol):
     except Exception:
         return []
 
-def analyze_with_claude(api_key, ticker, name, info, news_items):
+def analyze_with_gemini(api_key, ticker, name, info, news_items):
     news_text = "\n".join(
         f"- {n['title']}: {n['summary']}" for n in news_items
     ) if news_items else "ニュースなし"
@@ -124,13 +124,10 @@ PER: {info.get('per')} / PBR: {info.get('pbr')}
 ## 🔍 今後の注目ポイント
 （短期・中期で注目すべきイベントや指標を2〜3点）"""
 
-    client = anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return message.content[0].text
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    response = model.generate_content(prompt)
+    return response.text
 
 def parse_rakuten_csv(text):
     import csv, io
@@ -271,9 +268,9 @@ if stocks:
             st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔑 Claude APIキー")
+st.sidebar.markdown("### 🔑 Gemini APIキー")
 api_key_input = st.sidebar.text_input("APIキー", type="password",
-                                       placeholder="sk-ant-...",
+                                       placeholder="AIza...",
                                        value=st.session_state.get("api_key", ""))
 if api_key_input:
     st.session_state["api_key"] = api_key_input
@@ -400,9 +397,9 @@ with tab2:
                 st.info("🔑 左サイドバーにClaude APIキーを入力するとAI分析が使えます")
             else:
                 if st.button("🤖 AI分析を実行", key=f"ai_{ticker}"):
-                    with st.spinner("Claudeが分析中..."):
+                    with st.spinner("Geminiが分析中..."):
                         try:
-                            result = analyze_with_claude(api_key, ticker, info["name"], info, news)
+                            result = analyze_with_gemini(api_key, ticker, info["name"], info, news)
                             st.session_state[f"analysis_{ticker}"] = result
                         except Exception as e:
                             st.error(f"分析に失敗しました: {e}")
